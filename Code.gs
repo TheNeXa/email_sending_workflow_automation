@@ -7,8 +7,8 @@
  */
 const CONFIG = {
   // 1. Sheet Names
-  SHEET_MONITORING: "Monitoring JKT",   // Sheet to watch for edits
-  SHEET_CONTACTS: "Import Contact List",  // Sheet with email contacts
+  SHEET_MONITORING: "Monitoring Sheet",   // Sheet to watch for edits
+  SHEET_CONTACTS: "Contact List",  // Sheet with email contacts
 
   // 2. Monitoring Sheet Column Numbers
   MONITOR_CONFIG: {
