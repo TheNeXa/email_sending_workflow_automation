@@ -7,8 +7,8 @@
  */
 const CONFIG = {
   // 1. Sheet Names
-  SHEET_MONITORING: "Monitoring Sheet",   // Sheet to watch for edits
-  SHEET_CONTACTS: "Contact List",  // Sheet with email contacts
+  SHEET_MONITORING: "Task_Monitoring",    // Sheet to watch for edits
+  SHEET_CONTACTS: "Contact_List",         // Sheet with email contacts
 
   // 2. Monitoring Sheet Column Numbers
   MONITOR_CONFIG: {
@@ -23,24 +23,24 @@ const CONFIG = {
     DATA_END_COL: 21,     // U: "To Be Amended To Read" end
     
     ATTACHMENT_COL: 22,   // V: Column with Google Drive URL
-    KEY_DATA_COL: 3       // C: Column with unique ID (e.g., "BL Number")
+    KEY_DATA_COL: 3       // C: Column with unique ID (e.g., 'REQ-1001')
   },
 
   // 3. Contact List Sheet Column Numbers
   CONTACT_CONFIG: {
     START_ROW: 2,         // First row of contact data
-    REGION_COL: 2,        // B: Column with Region (e.g., "SAS", "EUA")
-    COUNTRY_COL: 3,       // C: Column with Country
-    BRANCH_COL: 4,        // D: Column with Branch
+    REGION_COL: 2,        // B: Column with Region (e.g., 'APAC', 'EMEA')
+    COUNTRY_COL: 3,       // C: Column with Country (e.g., 'Japan', 'Germany')
+    BRANCH_COL: 4,        // D: Column with Branch (e.g., 'Tokyo', 'Berlin')
     EMAIL_COL: 6          // F: Column with Email Address
   },
   
   // 4. Headers for the generated email table
-  // Must match the order of data columns in MONITOR_CONFIG
+  //    This array MUST have 8 items, matching the 16 columns
+  //    defined in MONITOR_CONFIG.DATA_START_COL/DATA_END_COL.
   CHANGE_HEADERS: [
-    "Shipper", "Consignee", "Notify Party", "Marks & No’s",
-    "No. of Package & Description of Goods", "Container No./Seal No.",
-    "Gross Weight(KGS)/Measurement(m3)", "Others"
+    "Item 1", "Item 2", "Item 3", "Item 4",
+    "Item 5", "Item 6", "Item 7", "Item 8"
   ],
 
   // 5. Generic email signature
@@ -61,7 +61,7 @@ const CONFIG = {
  */
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Automation Menu') // <-- RENAMED
+  ui.createMenu('Automation Menu')
     .addItem('Setup Dropdowns', 'setupDropdowns')
     .addItem('Log Sheet Names', 'logSheetNames')
     .addToUi();
@@ -181,7 +181,7 @@ function updateDependentDropdowns(row) {
       
     const countryCell = monitoringSheet.getRange(row, CONFIG.MONITOR_CONFIG.COUNTRY_COL);
     countryCell.setDataValidation(SpreadsheetApp.newDataValidation()
-      .requireValueInList(countries, true)
+      .requireValueInList(countries.length > 0 ? countries : ["N/A"], true)
       .build());
     
     // Clear Branch validation if Region changes
@@ -237,6 +237,7 @@ function sendAutomatedNotice(row) {
 
     let email = "";
     for (let i = 0; i < contactData.length; i++) {
+      // Find the row matching Region, Country, and Branch
       if (contactData[i][0] === region && contactData[i][1] === country && contactData[i][2] === branch) {
         email = contactData[i][CONFIG.CONTACT_CONFIG.EMAIL_COL - CONFIG.CONTACT_CONFIG.REGION_COL];
         break;
@@ -289,7 +290,7 @@ function sendAutomatedNotice(row) {
 /**
  * Generates the subject and body for the email.
  * CUSTOMIZE THIS FUNCTION for your own templates.
- * * @param {string} keyData - The unique ID, e.g., "BL12345".
+ * @param {string} keyData - The unique ID, e.g., "REQ-1001".
  * @param {string} country - The selected country, e.g., "USA".
  * @param {string} tableHtml - The generated HTML table of changes.
  * @returns {object} An object with {subject, body}.
@@ -298,9 +299,10 @@ function generateEmailContent(keyData, country, tableHtml) {
   let subject = "";
   let body = "";
 
-  // Example: Create a different template for a specific country
+  // Example: Create a different template for a specific 'country' or 'region'
+  // This logic is generic and can be adapted to any use case
   if (country === "USA") {
-    subject = `Request for Resubmission: ${keyData}`;
+    subject = `Request for Review: ${keyData}`;
     body = `
       Dear Team,<br><br>
       Please find below changes for your reference. We have updated the data as per the customer's request.<br><br>
@@ -311,7 +313,7 @@ function generateEmailContent(keyData, country, tableHtml) {
     `;
   } else {
     // Default template for all other countries
-    subject = `Data Correction Notice: ${keyData}`;
+    subject = `Data Change Notification: ${keyData}`;
     body = `
       Dear Colleagues,<br><br>
       We have updated the data for ${keyData}. Please find the correction details below:<br><br>
@@ -339,14 +341,14 @@ function extractFileIdFromUrl(url) {
   if (url.length > 40 && !url.includes('/')) {
     return url;
   }
-  throw new Error("Invalid Google Drive URL format");
+  throw new Error("Invalid Google Drive URL format. URL: " + url);
 }
 
 /**
  * Generates an HTML table from a row of data.
  * Assumes data is in pairs [old1, new1, old2, new2, ...]
- * * @param {Array} dataRow - The array of data from the sheet.
- * @param {Array} headers - The array of headers (e.g., "Shipper", "Consignee").
+ * @param {Array} dataRow - The array of data from the sheet.
+ * @param {Array} headers - The array of headers (e.g., "Item 1", "Item 2").
  * @returns {string} An HTML table.
  */
 function generateChangesTable(dataRow, headers) {
@@ -358,15 +360,19 @@ function generateChangesTable(dataRow, headers) {
         <th>New Value</th>
       </tr>`;
 
-  headers.forEach((header, index) => {
-    const oldVal = dataRow[index * 2] || "";
-    const newVal = dataRow[index * 2 + 1] || "";
+  // Ensure we don't go out of bounds
+  const pairCount = Math.min(headers.length, Math.floor(dataRow.length / 2));
+
+  for (let i = 0; i < pairCount; i++) {
+    const header = headers[i];
+    const oldVal = dataRow[i * 2] || "";
+    const newVal = dataRow[i * 2 + 1] || "";
 
     // Only add a row if there is data for it
     if (oldVal || newVal) {
       table += `<tr><td><b>${header}</b></td><td>${oldVal}</td><td>${newVal}</td></tr>`;
     }
-  });
+  }
   
   table += "</table>";
   return table;
