@@ -1,100 +1,87 @@
-# Correction Notice Automator
+# Email Sending Workflow Automation
 
-## Overview
-The **Correction Notice Automator** is a Google Apps Script solution designed to streamline the process of sending correction notices (CNs) for shipping documentation. Built for logistics teams, it automates email notifications based on bill of lading (BL) updates, pulling data from Google Sheets and integrating with a contact list. With dropdown menus, color-coded visuals, and region-specific email templates, it simplifies workflows for global shipping operations.
+A Google Apps Script solution for sending automated, data-driven email notifications based on user selections in a Google Sheet.
+
+This script monitors a sheet for changes. It dynamically populates dependent dropdowns (e.g., Region -> Country -> Branch) from a central contact list. When a user makes a final selection, it automatically finds the correct email address, generates a templated email with data from that row, and sends it.
 
 ## Features
-- **Custom Menu**: Adds a "CN Reminder" menu to your Google Sheet with options to set up dropdowns, configure the CN tool, and log sheet names.
-- **Dynamic Dropdowns**: Populates region, country, and branch dropdowns in a monitoring sheet, with real-time updates based on user selections.
-- **Color Coding**: Highlights countries (e.g., USA, Hong Kong, India) with distinct colors for quick visual reference.
-- **Email Automation**: Sends tailored correction notices for India, EU, and other regions, attaching files (e.g., Letters of Indemnity) when available.
-- **CN Tool**: A dedicated sheet for generating India and EU correction notices with pre-filled fields and dropdowns.
-- **Error Handling**: Alerts users to missing sheets or invalid inputs, with detailed logging for troubleshooting.
 
-## How It Works
-1. **Setup**: Initialize dropdowns and the CN tool via the custom menu.
-2. **Data Entry**: Input BL numbers and correction details in the monitoring or CN tool sheets.
-3. **Automation**: Trigger emails manually (via buttons) or automatically (on edit) with formatted tables and attachments.
-4. **Tracking**: Logs send status in the sheet with timestamps or error messages.
+* **Dynamic Dependent Dropdowns:** Populates 3-level dropdowns (e.g., Region, Country, Branch) that update based on the previous selection.
+* **Central `CONFIG` Object:** Easily configure all sheet names, column numbers, and settings in one place at the top of the script. No hardcoding.
+* **Data-Driven Email Automation:** Automatically triggers an email `onEdit` when a final "trigger" column is populated.
+* **HTML Table Generation:** Generates a clean HTML table of changes (from "Old Value" to "New Value") to include in the email.
+* **Google Drive Attachment Support:** Automatically finds and attaches a file from a Google Drive link specified in a column.
+* **Custom Menu:** Adds an "Automation Menu" to your Google Sheet to easily set up the dropdowns.
 
-## Key Code Highlights
-### Custom Menu Setup
-```javascript
-function onOpen() {
-  SpreadsheetApp.getUi().createMenu('CN Reminder')
-    .addItem('Setup Dropdowns', 'setupDropdowns')
-    .addItem('Setup CN Tool', 'setupCNTool')
-    .addItem('Log Sheet Names', 'logSheetNames')
-    .addToUi();
-}
-```
+## Repository Structure
 
-### Dynamic Dropdowns
-```javascript
-function updateDependentDropdowns(row) {
-  const region = monitoringSheet.getRange(row, 57).getValue();
-  const countries = contactData.filter(row => row[0] === region).map(row => row[1]);
-  monitoringSheet.getRange(row, 58).setDataValidation(
-    SpreadsheetApp.newDataValidation().requireValueInList(countries, true).build()
-  );
-}
-```
+├── Code.gs # The main Google Apps Script file └── README.md # This file
 
-### Email Sending (India CN Example)
-```javascript
-function sendIndiaCN() {
-  const blNumber = cnToolSheet.getRange("E5").getValue();
-  const branch = cnToolSheet.getRange("E6").getValue();
-  const tableHtml = generateCorrectionTable(matchingRowData);
-  MailApp.sendEmail({
-    to: email,
-    subject: `IND//MUM CORRECTION NOTICE AFTER BDR FOR BL ${blNumber}`,
-    htmlBody: `Dear Colleagues,<br>${tableHtml}<br>Thank you,<br>[Your Name]`
-  });
-}
-```
-
-## Use Case
-This tool is perfect for logistics teams managing shipping corrections across regions like India, the EU, and the USA. It:
-- **Saves Time**: Automates email drafting and data lookup.
-- **Reduces Errors**: Validates inputs and matches BL numbers to contact data.
-- **Improves Clarity**: Sends professional, formatted emails with correction details.
-- **Scales Globally**: Handles region-specific workflows with ease.
-
-## Prerequisites
-- A Google Sheets environment with Apps Script enabled.
-- Permissions for Spreadsheet, Drive, and Mail services in Apps Script.
 
 ## Setup Instructions
-1. **Sheets Required**:
-   - `Monitoring Sheet`: Tracks BL numbers and correction data (e.g., columns C:V for data, BE:BH for dropdowns/status).
-   - `Contact List`: Stores region, country, branch, and email data (e.g., columns B:F).
-   - `CN Tool` (optional): Created automatically by `setupCNTool()` for manual CN generation.
 
-2. **Steps**:
-   - Copy the script into your Google Apps Script editor.
-   - Run `onOpen()` to add the "CN Reminder" menu.
-   - Use `Setup Dropdowns` to configure the monitoring sheet.
-   - Use `Setup CN Tool` to create and configure the CN tool sheet.
-   - Add two buttons in the `CN Tool` sheet:
-     - "SEND INDIA CN" (assign to `sendIndiaCN`).
-     - "SEND EU CN" (assign to `sendEUCN`).
+### 1. Sheets Required
 
-3. **Permissions**: Grant access to Spreadsheet, Drive (for attachments), and Mail services when prompted.
+You need two (2) sheets in your Google Spreadsheet. You can name them whatever you want and update the names in the `CONFIG` object.
+
+* **Monitoring Sheet (Default: "Monitoring"):** This is the main sheet where you track data and trigger emails.
+    * **Data Columns:** You need columns for your data (e.g., "Shipper", "Consignee").
+    * **Key ID Column:** A column with a unique ID (e.g., "Tracking Number").
+    * **Dropdown Columns:** Three columns for the dynamic dropdowns (e.g., "Region", "Country", "Branch").
+    * **Status Column:** A column where the script will write "Sent" or "Error."
+    * **Attachment Column:** (Optional) A column containing a full Google Drive URL to a file.
+* **Contact List Sheet (Default: "Contact List"):** This sheet acts as your database for the dropdowns and emails.
+    * **Column 1:** Region (e.g., "AMER", "APAC", "EMEA")
+    * **Column 2:** Country (e.g., "USA", "Japan", "Germany")
+    * **Column 3:** Branch (e.g., "New York", "Tokyo", "Berlin")
+    * **Column 4:** Email Address (e.g., "team@example.com")
+
+### 2. Configure the Script
+
+1.  Copy the contents of `Code.gs` into the Apps Script editor of your Google Sheet.
+2.  At the top of `Code.gs`, **update the `CONFIG` object** to match your sheet names and column numbers (A=1, B=2, C=3, etc.). This is the most important step.
+    ```javascript
+    const CONFIG = {
+      SHEET_MONITORING: "Monitoring",
+      SHEET_CONTACTS: "Contact List",
+      
+      MONITOR_CONFIG: {
+        START_ROW: 3,         // First row of data in Monitoring sheet
+        REGION_COL: 57,       // Column for "Region" dropdown
+        COUNTRY_COL: 58,      // Column for "Country" dropdown
+        BRANCH_COL: 59,       // Column for "Branch" (trigger)
+        STATUS_COL: 60,       // Column for "Sent" status
+        DATA_START_COL: 6,    // First data column for email table
+        DATA_END_COL: 21,     // Last data column for email table
+        ATTACHMENT_COL: 22,   // Column with Google Drive URL
+        KEY_DATA_COL: 3       // Column with unique ID (e.g., Tracking #)
+      },
+      // ...etc.
+    };
+    ```
+
+### 3. Authorize the Script
+
+1.  Save the script.
+2.  Reload your Google Sheet. A new **"Automation Menu"** will appear.
+3.  Click **Automation Menu > Setup Dropdowns**.
+4.  A popup will ask for authorization. Grant the script permission to access your Sheets, Drive (for attachments), and Mail services.
 
 ## Usage
-- **Automatic Sending**: Edit the branch column (BG) in the monitoring sheet to trigger a correction notice.
-- **Manual Sending**: Use the `CN Tool` sheet to input BL numbers and send India or EU notices via buttons.
-- **Debugging**: Run `Log Sheet Names` to check sheet setup in the Apps Script logs.
+
+1.  Fill in your `Contact List` sheet with your regions, countries, branches, and corresponding email addresses.
+2.  Run **Automation Menu > Setup Dropdowns** to apply the validation rules to your `Monitoring` sheet.
+3.  In the `Monitoring` sheet, fill in a row with data.
+4.  Use the dropdowns to select a **Region**, then **Country**.
+5.  When you select a **Branch** (the trigger column), the `onEdit` function will fire.
+6.  The script will:
+    * Find the correct email from the `Contact List`.
+    * Find all data for that row.
+    * Generate an HTML table of changes.
+    * Attach any file from the attachment column.
+    * Send the email.
+    * Update the "Status" column to "Sent" or "Failed."
 
 ## Customization
-- **Dropdowns**: Modify `setupDropdowns` and `setupCNTool` to adjust regions, countries, or branches.
-- **Email Templates**: Edit `sendIndiaCN`, `sendEUCN`, or `sendCorrectionNotice` to tweak subjects and bodies.
-- **Colors**: Update `applyColorCoding` to change country-specific highlights.
 
-## Notes
-- Replace `[Your Name]` in email templates with your actual name or a variable.
-- Ensure the contact list includes valid emails in column F.
-- Test with a small dataset before scaling to avoid email quotas.
-
-Feel free to fork this repo, tweak the code, and submit pull requests with improvements or bug fixes!
+To change the email content, edit the `generateEmailContent` function inside `Code.gs`. You can create different subjects and bodies based on the data (like `country` or `region`) passed to it.
